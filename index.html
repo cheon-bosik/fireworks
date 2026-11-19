@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>불꽃놀이</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #02030a;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: manipulation;
+    font-family: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+  }
+  body {
+    background: radial-gradient(ellipse at 50% 100%, #1a1f4a 0%, #0a0c24 45%, #02030a 100%);
+  }
+  canvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  #title {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 6vh);
+    left: 0;
+    right: 0;
+    text-align: center;
+    color: #fff;
+    font-size: clamp(2rem, 9vw, 4.5rem);
+    font-weight: 800;
+    letter-spacing: 0.15em;
+    text-shadow: 0 0 12px rgba(255, 220, 140, 0.8), 0 0 30px rgba(255, 140, 200, 0.5);
+    pointer-events: none;
+    z-index: 2;
+  }
+  #hint {
+    position: fixed;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 6vh);
+    left: 0;
+    right: 0;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: clamp(0.9rem, 3.5vw, 1.2rem);
+    pointer-events: none;
+    z-index: 2;
+    animation: pulse 2s ease-in-out infinite;
+    transition: opacity 0.8s;
+  }
+  #hint.hide { opacity: 0; animation: none; }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.35; }
+    50% { opacity: 0.9; }
+  }
+</style>
+</head>
+<body>
+  <canvas id="stars"></canvas>
+  <canvas id="fx"></canvas>
+  <div id="title">불꽃놀이</div>
+  <div id="hint" id="hint">화면 아무 곳이나 눌러 보세요</div>
+
+<script>
+(function () {
+  var starsCanvas = document.getElementById('stars');
+  var fxCanvas = document.getElementById('fx');
+  var sctx = starsCanvas.getContext('2d');
+  var ctx = fxCanvas.getContext('2d');
+  var hint = document.getElementById('hint');
+  var W = 0, H = 0, dpr = 1;
+  var particles = [];
+  var MAX_PARTICLES = 2500;
+
+  function drawStars() {
+    sctx.clearRect(0, 0, W, H);
+    var count = Math.floor((W * H) / 5000);
+    for (var i = 0; i < count; i++) {
+      var x = Math.random() * W;
+      var y = Math.random() * H * 0.9;
+      var r = Math.random() * 1.2 + 0.2;
+      sctx.globalAlpha = Math.random() * 0.7 + 0.2;
+      sctx.fillStyle = '#ffffff';
+      sctx.beginPath();
+      sctx.arc(x, y, r, 0, Math.PI * 2);
+      sctx.fill();
+    }
+    sctx.globalAlpha = 1;
+  }
+
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth;
+    H = window.innerHeight;
+    [starsCanvas, fxCanvas].forEach(function (c) {
+      c.width = Math.floor(W * dpr);
+      c.height = Math.floor(H * dpr);
+    });
+    sctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawStars();
+  }
+  window.addEventListener('resize', resize);
+  window.addEventListener('orientationchange', resize);
+  resize();
+
+  function rand(min, max) { return Math.random() * (max - min) + min; }
+
+  function burst(x, y) {
+    var baseHue = Math.random() * 360;
+    var multi = Math.random() < 0.4;
+    var shape = Math.random() < 0.25 ? 'ring' : 'sphere';
+    var scale = Math.min(W, H) / 700 + 0.55;
+    var count = Math.floor(rand(70, 110));
+
+    for (var i = 0; i < count; i++) {
+      var angle = (Math.PI * 2 * i) / count + rand(-0.05, 0.05);
+      var speed = shape === 'ring' ? 5.5 * scale : rand(1.5, 7) * scale;
+      var hue = multi ? (baseHue + rand(-60, 60) + 360) % 360 : baseHue + rand(-12, 12);
+      particles.push({
+        x: x,
+        y: y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        life: 1,
+        decay: rand(0.008, 0.018),
+        size: rand(1.4, 2.8),
+        hue: hue,
+        light: rand(55, 75),
+        sparkle: Math.random() < 0.3
+      });
+    }
+
+    // 중앙의 밝은 섬광
+    for (var j = 0; j < 12; j++) {
+      var a = rand(0, Math.PI * 2);
+      var s = rand(0.3, 2) * scale;
+      particles.push({
+        x: x, y: y,
+        vx: Math.cos(a) * s,
+        vy: Math.sin(a) * s,
+        life: 1,
+        decay: rand(0.03, 0.05),
+        size: rand(2, 3.5),
+        hue: 45,
+        light: 90,
+        sparkle: false
+      });
+    }
+
+    if (particles.length > MAX_PARTICLES) {
+      particles.splice(0, particles.length - MAX_PARTICLES);
+    }
+  }
+
+  function onPointer(e) {
+    e.preventDefault();
+    burst(e.clientX, e.clientY);
+    hint.classList.add('hide');
+  }
+  window.addEventListener('pointerdown', onPointer, { passive: false });
+
+  function frame() {
+    // 잔상: 이전 프레임을 서서히 지워 꼬리를 만든다
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.globalCompositeOperation = 'lighter';
+
+    for (var i = particles.length - 1; i >= 0; i--) {
+      var p = particles[i];
+      p.vx *= 0.985;
+      p.vy *= 0.985;
+      p.vy += 0.045;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.life -= p.decay;
+
+      if (p.life <= 0) {
+        particles.splice(i, 1);
+        continue;
+      }
+
+      var alpha = p.life;
+      if (p.sparkle && Math.random() < 0.4) alpha *= 0.3;
+
+      ctx.fillStyle = 'hsla(' + p.hue + ', 100%, ' + p.light + '%, ' + alpha + ')';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * (0.5 + p.life * 0.5), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
